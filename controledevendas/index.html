@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#228b22">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.json">
+    <title>Controle de Vendas</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background-color: #f0f8ff; margin: 0; padding: 15px; }
+        .container { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .logo { text-align: center; margin-bottom: 20px; font-size: 60px; color: #228b22; font-weight: bold; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #228b22; }
+        input { width: 100%; padding: 14px; border: 2px solid #228b22; border-radius: 8px; font-size: 16px; }
+        button { width: 100%; padding: 16px; background-color: #228b22; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+        .btn-pagar { background-color: #228b22; }
+        .btn-limpar { background-color: #666; margin-top: 15px; }
+        .btn-excel { background-color: #217346; }
+        .busca-wrapper { position: relative; margin: 10px 0; }
+        .busca-input { padding: 10px 35px 10px 12px; font-size: 14px; border: 1px solid #ccc; border-radius: 20px; background: #f5f5f5; width: 100%; }
+        .busca-input:focus { border-color: #228b22; background: white; outline: none; }
+        .busca-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; font-size: 16px; cursor: pointer; color: #999; }
+        table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #228b22; color: white; }
+        .saldo-positivo { color: #228b22; font-weight: bold; font-size: 18px; }
+        .saldo-negativo { color: #e91e63; font-weight: bold; font-size: 18px; }
+        .acoes { display: flex; gap: 5px; }
+        .acoes button { flex: 1; padding: 12px; font-size: 14px; }
+        .btn-excluir { background-color: #dc143c; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 9999; }
+        .modal-content { background-color: white; padding: 25px; border-radius: 15px; width: 90%; max-width: 350px; margin: 20% auto; }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-buttons button { flex: 1; }
+        .btn-cancelar { background-color: #666; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="logo">$</div>
+    
+    <div class="form-group">
+        <label>Nome:</label>
+        <input type="text" id="nome" placeholder="Nome do cliente">
+    </div>
+    
+    <div class="form-group">
+        <label>WhatsApp:</label>
+        <input type="tel" id="telefone" placeholder="11999999999">
+    </div>
+    
+    <div class="form-group">
+        <label>Valor (R$):</label>
+        <input type="number" id="valor" placeholder="10" step="0.01">
+    </div>
+    
+    <button onclick="adicionar()">CADASTRAR / ADICIONAR</button>
+    
+    <div class="busca-wrapper">
+        <input type="text" id="busca" class="busca-input" placeholder="Buscar..." onkeyup="buscarCliente()">
+        <span class="busca-clear" onclick="limparBusca()">x</span>
+    </div>
+    
+    <table>
+        <thead>
+            <tr><th>Cliente</th><th>Valor</th><th>Ação</th></tr>
+        </thead>
+        <tbody id="corpo-tabela"></tbody>
+    </table>
+    
+    <button class="btn-limpar" onclick="limparDados()">LIMPAR TODOS OS DADOS</button>
+    
+    <div style="margin-top:30px;">
+        <button class="btn-excel" onclick="exportarExcel()">EXPORTAR</button>
+        <button class="btn-excel" onclick="importarExcel()">IMPORTAR</button>
+    </div>
+</div>
+
+<div id="modalPagar" class="modal">
+    <div class="modal-content">
+        <h3 id="tituloModal" style="color:#228b22;margin-top:0;margin-bottom:15px;">Pagamento</h3>
+        <div class="form-group">
+            <label>Valor:</label>
+            <input type="number" id="valorPagar" placeholder="20" step="0.01">
+        </div>
+        <div class="modal-buttons">
+            <button class="btn-cancelar" onclick="fecharModal('modalPagar')">Cancelar</button>
+            <button onclick="confirmarPagamento()">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modalExcluir" class="modal">
+    <div class="modal-content">
+        <h3 style="color:#228b22;margin-top:0;margin-bottom:15px;">Excluir Cliente?</h3>
+        <p>Excluir <strong id="nomeExcluir"></strong>?</p>
+        <div class="modal-buttons">
+            <button class="btn-cancelar" onclick="fecharModal('modalExcluir')">Cancelar</button>
+            <button class="btn-excluir" onclick="confirmarExclusao()">Excluir</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    var clienteAtual = null;
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+    }
+
+    window.onload = function() { atualizarTabela(); };
+
+    function limparBusca() {
+        document.getElementById('busca').value = '';
+        atualizarTabela();
+    }
+
+    function buscarCliente() {
+        var termo = document.getElementById('busca').value.toLowerCase();
+        var clientes = JSON.parse(localStorage.getItem('clientesVendas')) || [];
+        var corpo = document.getElementById('corpo-tabela');
+        corpo.innerHTML = '';
+        
+        var clientesFiltrados = clientes.filter(function(c) {
+            return c.nome.toLowerCase().indexOf(termo) !== -1;
+        });
+        
+        clientesFiltrados.sort(function(a, b) { return a.nome.localeCompare(b.nome); });
+
+        for (var i = 0; i < clientesFiltrados.length; i++) {
+            var cliente = clientesFiltrados[i];
+            var indiceReal = clientes.findIndex(function(c) { return c.nome === cliente.nome; });
+            var classe = cliente.total >= 0 ? 'saldo-positivo' : 'saldo-negativo';
+            var what = cliente.telefone ? '<a href="https://wa.me/55' + cliente.telefone + '" style="color:#228b22;font-size:11px;">' + cliente.telefone + '</a>' : '-';
+            
+            corpo.innerHTML += '<tr><td><strong>' + cliente.nome + '</strong><br>' + what + '</td><td><span class="' + classe + '">R$ ' + cliente.total.toFixed(2) + '</span></td><td class="acoes"><button class="btn-pagar" onclick="abrirModalPagar(' + indiceReal + ')">$</button><button class="btn-excluir" onclick="abrirModalExcluir(' + indiceReal + ')">X</button></td></tr>';
+        }
+    }
+
+    function adicionar() {
+        var nome = document.getElementById('nome').value.trim();
+        var telefone = document.getElementById('telefone').value.trim();
+        var valor = parseFloat(document.getElementById('valor').value);
+        
+        if (!nome) { return; }
+
+        var clientes = JSON.parse(localStorage.getItem('clientesVendas')) || [];
+        var clienteExistente = null;
+        
+        for (var i = 0; i < clientes.length; i++) {
+            if (clientes[i].nome.toLowerCase() === nome.toLowerCase()) {
+                clienteExistente = clientes[i];
+                break;
+            }
+        }
+
+        if (clienteExistente) {
+            if (!isNaN(valor) && valor > 0) clienteExistente.total += valor;
+            if (!clienteExistente.telefone && telefone) clienteExistente.telefone = telefone;
+        } else {
+            clientes.push({ nome: nome, telefone: telefone, total: isNaN(valor) ? 0 : valor });
+        }
+
+        localStorage.setItem('clientesVendas', JSON.stringify(clientes));
+        document.getElementById('nome').value = '';
+        document.getElementById('telefone').value = '';
+        document.getElementById('valor').value = '';
+        atualizarTabela();
+    }
+
+    function atualizarTabela() {
+        var clientes = JSON.parse(localStorage.getItem('clientesVendas')) || [];
+        var corpo = document.getElementById('corpo-tabela');
+        corpo.innerHTML = '';
+        
+        clientes.sort(function(a, b) { return a.nome.localeCompare(b.nome); });
+
+        for (var i = 0; i < clientes.length; i++) {
+            var cliente = clientes[i];
+            var classe = cliente.total >= 0 ? 'saldo-positivo' : 'saldo-negativo';
+            var what = cliente.telefone ? '<a href="https://wa.me/55' + cliente.telefone + '" style="color:#228b22;font-size:11px;">' + cliente.telefone + '</a>' : '-';
+            
+            corpo.innerHTML += '<tr><td><strong>' + cliente.nome + '</strong><br>' + what + '</td><td><span class="' + classe + '">R$ ' + cliente.total.toFixed(2) + '</span></td><td class="acoes"><button class="btn-pagar" onclick="abrirModalPagar(' + i + ')">$</button><button class="btn-excluir" onclick="abrirModalExcluir(' + i + ')">X</button></td></tr>';
+        }
+    }
+
+    function abrirModalPagar(index) {
+        clienteAtual = index;
+        var clientes = JSON.parse(localStorage.getItem('clientesVendas'));
+        document.getElementById('tituloModal').innerText = 'Receber - ' + clientes[index].nome;
+        document.getElementById('valorPagar').value = '';
+        document.getElementById('modalPagar').style.display = 'block';
+    }
+
+    function confirmarPagamento() {
+        var valorPago = parseFloat(document.getElementById('valorPagar').value);
+        if (isNaN(valorPago) || valorPago <= 0) { return; }
+        
+        var clientes = JSON.parse(localStorage.getItem('clientesVendas'));
+        clientes[clienteAtual].total -= valorPago;
+        localStorage.setItem('clientesVendas', JSON.stringify(clientes));
+        fecharModal('modalPagar');
+        atualizarTabela();
+    }
+
+    function abrirModalExcluir(index) {
+        clienteAtual = index;
+        var clientes = JSON.parse(localStorage.getItem('clientesVendas'));
+        document.getElementById('nomeExcluir').innerText = clientes[index].nome;
+        document.getElementById('modalExcluir').style.display = 'block';
+    }
+
+    function confirmarExclusao() {
+        var clientes = JSON.parse(localStorage.getItem('clientesVendas'));
+        clientes.splice(clienteAtual, 1);
+        localStorage.setItem('clientesVendas', JSON.stringify(clientes));
+        fecharModal('modalExcluir');
+        atualizarTabela();
+    }
+
+    function fecharModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function limparDados() {
+        if (confirm('APAGAR TODOS OS DADOS?')) {
+            localStorage.removeItem('clientesVendas');
+            atualizarTabela();
+        }
+    }
+
+    function exportarExcel() {
+        var clientes = JSON.parse(localStorage.getItem('clientesVendas')) || [];
+        if (clientes.length === 0) { return; }
+        var csv = 'Nome;WhatsApp;Valor\n';
+        for (var i = 0; i < clientes.length; i++) { 
+            csv += clientes[i].nome + ';' + (clientes[i].telefone || '') + ';' + clientes[i].total.toFixed(2) + '\n'; 
+        }
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'vendas_' + new Date().toISOString().slice(0,10) + '.csv';
+        link.click();
+    }
+
+    function importarExcel() {
+        var input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.csv,.txt';
+        input.onchange = function(e) {
+            var file = e.target.files[0];
+            var reader = new FileReader();
+            reader.onload = function(event) {
+                var texto = event.target.result;
+                var linhas = texto.split('\n');
+                var clientes = [];
+                for (var i = 1; i < linhas.length; i++) {
+                    var linha = linhas[i].trim();
+                    if (linha) {
+                        var partes = linha.split(';');
+                        if (partes.length >= 3) {
+                            clientes.push({ nome: partes[0].trim(), telefone: partes[1].trim(), total: parseFloat(partes[2]) || 0 });
+                        }
+                    }
+                }
+                if (clientes.length > 0) {
+                    var clientesExistente = JSON.parse(localStorage.getItem('clientesVendas')) || [];
+                    for (var j = 0; j < clientes.length; j++) {
+                        var novo = clientes[j];
+                        var existente = null;
+                        for (var k = 0; k < clientesExistente.length; k++) {
+                            if (clientesExistente[k].nome.toLowerCase() === novo.nome.toLowerCase()) {
+                                existente = clientesExistente[k];
+                                break;
+                            }
+                        }
+                        if (existente) {
+                            existente.total += novo.total;
+                            if (!existente.telefone && novo.telefone) existente.telefone = novo.telefone;
+                        } else {
+                            clientesExistente.push(novo);
+                        }
+                    }
+                    localStorage.setItem('clientesVendas', JSON.stringify(clientesExistente));
+                    atualizarTabela();
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+</script>
+</body>
+</html>

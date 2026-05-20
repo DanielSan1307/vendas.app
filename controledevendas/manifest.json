@@ -1,0 +1,10 @@
+{
+  "name": "Controle de Vendas",
+  "short_name": "Vendas",
+  "description": "Controle de vendas e recebimentos",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#f0f8ff",
+  "theme_color": "#228b22",
+  "orientation": "portrait"
+}
